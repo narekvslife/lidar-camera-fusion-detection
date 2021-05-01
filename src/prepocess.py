@@ -19,10 +19,10 @@ def sample_to_rangeview(sample: dict,
         Lookup into each of feature matrices looks like matrice[laser_number][azimuth_bin]
     """
 
-    my_sample_lidar_data = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
+    my_sample_lidar_data = NUSCENES.get('sample_data', sample['data']['LIDAR_TOP'])
 
     # loading directly from files to preceive the ring_index information
-    scan = np.fromfile(dataset_path + my_sample_lidar_data["filename"], dtype=np.float32)
+    scan = np.fromfile(DATASET_PATH + my_sample_lidar_data["filename"], dtype=np.float32)
     raw_points = scan.reshape((-1, 5))
 
     points_df = pd.DataFrame(raw_points, columns=['x', 'y', 'z', 'intensity', 'ring_index'])
