@@ -78,7 +78,7 @@ def sample_to_rangeview(sample: dict,
 
         points_features = np.vstack(points_features).reshape((height, width, 6))
 
-        # we will need point coordinates (x, y) later in LaserNet
+        # we will need coordinates of a point in each cell later in LaserNet
         point_coordinates = points_features[:, :, :2]
 
         # here are the 4 channels: distance, azimuth, reflectance, and height
@@ -91,6 +91,7 @@ def sample_to_rangeview(sample: dict,
         assert image.shape[: 2] == point_coordinates.shape[: 2]
         # need to reflect x and y, so it matches camera view
         image = image[::-1, ::-1, :].T
+        point_coordinates = point_coordinates[::-1, ::-1, :].T
     except ValueError:
         print(sample['token'])
 
