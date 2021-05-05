@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-
+from os.path import join
 
 from .settings import DATASET_PATH, NUSCENES
 
@@ -19,13 +19,18 @@ def sample_to_rangeview(sample: dict,
         Lookup into each of feature matrices looks like matrice[laser_number][azimuth_bin]
     """
 
-    my_sample_lidar_data = NUSCENES.get('sample_data', sample['data']['LIDAR_TOP'])
+    sample_data_token = sample['data']['LIDAR_TOP']
+    my_sample_lidar_data = NUSCENES.get('sample_data', sample_data_token)
+
+    lidarseg_labels_filename = join(NUSCENES.dataroot,
+                                    NUSCENES.get('lidarseg', sample_data_token)['filename'])
 
     # loading directly from files to preceive the ring_index information
-    scan = np.fromfile(DATASET_PATH + my_sample_lidar_data["filename"], dtype=np.float32)
-    raw_points = scan.reshape((-1, 5))
+    points_raw = np.fromfile(DATASET_PATH + my_sample_lidar_data["filename"], dtype=np.float32).reshape((-1, 5))
+    point_labeles = np.fromfile(lidarseg_labels_filename, dtype=np.uint8)
 
-    points_df = pd.DataFrame(raw_points, columns=['x', 'y', 'z', 'intensity', 'ring_index'])
+    points_df = pd.DataFrame(points_raw, columns=['x', 'y', 'z', 'intensity', 'ring_index'])
+    points_df['class'] = point_labeles
     points_df['azimuth'] = np.degrees(np.arctan(points_df['x'] / points_df['y']))
 
     # Transform front azimuth to be in range from 0 to 180
@@ -40,7 +45,6 @@ def sample_to_rangeview(sample: dict,
     df_len = len(points_df)
     # Reindex by row number
     points_df.index = np.arange(df_len)
-    # Add adrtificial row
 
     # distance to the point is one of the interesting features
     points_df['distance'] = (points_df.x ** 2 + points_df.y ** 2 + points_df.z ** 2) ** 1 / 2
@@ -51,17 +55,26 @@ def sample_to_rangeview(sample: dict,
                                            bins=np.arange(0, 90, bin_size))
 
     # artificial "point" which will represent values for missing points
-    points_df.loc[df_len] = (0, 0, 0, 0, 0, 0, 0, 1)
+    points_df.loc[df_len] = (0, 0, 0, 0, 0, 0, 0, 0, 1)
 
     # Finally construct the Range View image
     # First, we construct 4 channels: height, intensity, aziumth, distance
     image = np.zeros((height, width, 5))
     #     try:
     # row numbers of points which have minimal distance in their groups
-    idx_min = points_df.groupby(['ring_index', 'azimuth_bin']).distance.idxmin().unstack(
-        fill_value=df_len).stack().values
+
+    idx_min = points_df.groupby(['ring_index', 'azimuth_bin']) \
+        .distance.idxmin() \
+        .unstack(fill_value=df_len).stack().values
+    points_df = points_df.loc[idx_min]
+
+    point_labeles = points_df['class'].values.reshape((height, width))
+
+    points_df.drop(['class'], inplace=True, axis=1)
     points_df.drop(['ring_index', 'azimuth_bin'], inplace=True, axis=1)
-    points_features = points_df.loc[idx_min].values
+
+    points_features = points_df.values
+
     points_features = points_features.reshape((height, width, 6))
 
     # we will need coordinates of a point in each cell later in LaserNet
@@ -75,10 +88,9 @@ def sample_to_rangeview(sample: dict,
     image[:, :, 4] = (image[:, :, :].sum(axis=2) != 0).astype(int)
 
     assert image.shape[: 2] == point_coordinates.shape[: 2]
-    # need to reflect x and y, so it matches camera view
-    image = image[::-1, ::-1, :]
-    point_coordinates = point_coordinates[::-1, ::-1, :]
+
     #     except ValueError:
     #         print(sample['token'])
 
-    return image, point_coordinates
+    # need to reflect x and y, so it matches camera view
+    return image[::-1, ::-1, :], point_coordinates[::-1, ::-1, :], point_labeles[::-1, ::-1]
