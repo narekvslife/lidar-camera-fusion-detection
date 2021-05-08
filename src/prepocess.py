@@ -3,6 +3,21 @@ import pandas as pd
 from os.path import join
 
 from .settings import DATASET_PATH, NUSCENES
+from scipy.spatial.transform import Rotation
+
+
+def compute_absolute_coordinates(ego_translation: np.array,
+                                 ego_rotation_q: np.array,
+                                 relative_coordinates: np.array):
+    assert len(ego_rotation_q) == 4
+    assert len(ego_translation) == 3
+
+    R = Rotation.from_quat(ego_rotation_q).as_matrix()[:2, :2]
+    relative_coordinates_unsq = np.expand_dims(relative_coordinates, 3)
+
+    #     print(R.shape, relative_coordinates_unsq.shape)
+    absolute_coordinates = ego_translation[:2] + (R @ relative_coordinates_unsq).squeeze(3)
+    return absolute_coordinates
 
 
 def sample_to_rangeview(sample: dict,
@@ -60,37 +75,37 @@ def sample_to_rangeview(sample: dict,
     # Finally construct the Range View image
     # First, we construct 4 channels: height, intensity, aziumth, distance
     image = np.zeros((height, width, 5))
-    #     try:
-    # row numbers of points which have minimal distance in their groups
+    try:
+        # we only leave the points which have minimal distance in their groups
+        idx_min = points_df.groupby(['ring_index', 'azimuth_bin']) \
+            .distance.idxmin() \
+            .unstack(fill_value=df_len).stack().values
+        points_df = points_df.loc[idx_min]
 
-    idx_min = points_df.groupby(['ring_index', 'azimuth_bin']) \
-        .distance.idxmin() \
-        .unstack(fill_value=df_len).stack().values
-    points_df = points_df.loc[idx_min]
+        point_labeles = points_df['class'].values.reshape((height, width))
 
-    point_labeles = points_df['class'].values.reshape((height, width))
+        points_df.drop(['ring_index', 'azimuth_bin', 'class'], inplace=True, axis=1)
 
-    points_df.drop(['class'], inplace=True, axis=1)
-    points_df.drop(['ring_index', 'azimuth_bin'], inplace=True, axis=1)
+        points_features = points_df.values.reshape((height, width, 6))
 
-    points_features = points_df.values
+        # during LaserNet inference, we will need absolute coordinates of a point in each cell
+        relative_point_coordinates = points_features[:, :, :2]
+        ego = NUSCENES.get('ego_pose', my_sample_lidar_data['ego_pose_token'])
+        absolute_coordinates = compute_absolute_coordinates(ego_translation=ego['translation'],
+                                                            ego_rotation_q=ego['rotation'],
+                                                            relative_coordinates=relative_point_coordinates)
 
-    points_features = points_features.reshape((height, width, 6))
+        # here are the 4 channels: distance, azimuth, reflectance, and height
+        image[:, :, :4] = points_features[:, :, 2:]
 
-    # we will need coordinates of a point in each cell later in LaserNet
-    point_coordinates = points_features[:, :, :2]
+        # 5th channel is a flag which shows whether there is a point or not.
+        # If distance == azimuth == ring_index == 0 => no point
+        image[:, :, 4] = (image[:, :, :].sum(axis=2) != 0).astype(int)
 
-    # here are the 4 channels: distance, azimuth, reflectance, and height
-    image[:, :, :4] = points_features[:, :, 2:]
+        assert image.shape[: 2] == absolute_coordinates.shape[: 2]
 
-    # 5th channel is a flag which shows whether there is a point or not.
-    # If distance == azimuth == ring_index == 0 => no point
-    image[:, :, 4] = (image[:, :, :].sum(axis=2) != 0).astype(int)
-
-    assert image.shape[: 2] == point_coordinates.shape[: 2]
-
-    #     except ValueError:
-    #         print(sample['token'])
+    except ValueError:
+        print(sample['token'])
 
     # need to reflect x and y, so it matches camera view
-    return image[::-1, ::-1, :], point_coordinates[::-1, ::-1, :], point_labeles[::-1, ::-1]
+    return image[::-1, ::-1, :], absolute_coordinates[::-1, ::-1, :], point_labeles[::-1, ::-1]
