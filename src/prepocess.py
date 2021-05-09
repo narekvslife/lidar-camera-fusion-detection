@@ -13,7 +13,7 @@ def transform_pcl_to_global(pcl, sample_data):
         :return: pcl in abslute coordinate system
     """
 
-    # First step: transform the pointcloud to the ego vehicle frame for the timestamp of the sweep.
+    # First step: transform the pointcloud to the ego vehicle frame
     cs_record = NUSCENES.get('calibrated_sensor', sample_data['calibrated_sensor_token'])
     pcl.rotate(Quaternion(cs_record['rotation']).rotation_matrix)
     pcl.translate(np.array(cs_record['translation']))
@@ -43,12 +43,11 @@ def sample_to_rangeview(sample: dict,
     sample_data_token = sample['data']['LIDAR_TOP']
 
     my_sample_lidar_data = NUSCENES.get('sample_data', sample_data_token)
-    ego = NUSCENES.get('ego_pose', my_sample_lidar_data['ego_pose_token'])
 
     lidarseg_labels_filename = join(NUSCENES.dataroot,
                                     NUSCENES.get('lidarseg', sample_data_token)['filename'])
 
-    # loading directly from files to preceive the ring_index information
+    # loading directly from files to perceive the ring_index information
     points_raw = np.fromfile(DATASET_PATH + my_sample_lidar_data["filename"], dtype=np.float32).reshape((-1, 5))
     point_labeles = np.fromfile(lidarseg_labels_filename, dtype=np.uint8)
 
@@ -78,7 +77,9 @@ def sample_to_rangeview(sample: dict,
     points_df.index = np.arange(df_len)
 
     # distance to the point is one of the interesting features
-    points_df['distance'] = (points_df.rel_x ** 2 + points_df.rel_y ** 2 + points_df.rel_z ** 2) ** 1 / 2
+    points_df['distance'] = np.linalg.norm(np.vstack((points_df.rel_x.values,
+                                                      points_df.rel_y.values,
+                                                      points_df.rel_z.values)), axis=0)
 
     # We want to divide front 90 degrees into number of bins equal to width
     bin_size = 90 / width
@@ -126,4 +127,3 @@ def sample_to_rangeview(sample: dict,
 
     # need to reflect x and y, so it matches camera view
     return image[::-1, ::-1, :], absolute_coordinates[::-1, ::-1, ::], point_labeles[::-1, ::-1]
-
