@@ -116,18 +116,6 @@ def params_to_box_corners(bb_params: torch.Tensor,
     return bb_abs_corners
 
 
-def point_is_in_front(point_azimuth: int, front_degrees: int = 90):
-    """
-    :param point_azimuth: azimuth of a point
-    :param front_degrees: range of front degrees, in which the point should fall
-    :return:
-    """
-    assert 0 <= front_degrees <= 180
-
-    half_degree_range = front_degrees / 2
-    return 90 - half_degree_range / 2 < point_azimuth  < 90 + half_degree_range
-
-
 def get_front_bb(sample: dict):
     """
     Function computes and returns
