@@ -128,9 +128,6 @@ def point_is_in_front(point_azimuth: int, front_degrees: int = 90):
     return 90 - half_degree_range / 2 < point_azimuth  < 90 + half_degree_range
 
 
-from nuscenes.utils.data_classes import Box
-
-
 def get_front_bb(sample: dict):
     """
     Function computes and returns
@@ -177,6 +174,39 @@ def get_front_bb(sample: dict):
 
         corners.append(box.bottom_corners())
 
-    corners = np.array(corners)
-    corners[:, 2, :] = np.zeros_like(corners[:, 1, :])
-    return corners
+    return np.transpose(np.array(corners).T, (2, 0, 1))
+
+
+def get_bb_targets(coordinates, bounding_boxes):
+    """
+    coordinate.shape (N, 3, RV_WIDTH, RV_HEIGHT)
+    bounding_boxes.shape (N, M_n, 4, 3) where M_n is different for each N
+    """
+    bb_targets = []
+    print(coordinates.shape)
+    n, _, rv_width, rv_height = coordinates.shape
+    for cs_i in range(n):
+        bb_targets_single_rv = np.zeros((4, 3, rv_width, rv_height))
+        for bb in bounding_boxes[cs_i]:  # bounding_boxes[cs_i] - bounding box corners for according point cloud
+            # bb[0] - left_top coordinates
+            # bb[1] - left_bottom coordinates
+            # bb[2] - right_bottom coordinates
+            # bb[3] - right_top coordinates
+
+            # bb[x][0] - x coordinate
+            # bb[x][1] - y coordinate
+
+            coords = coordinates[cs_i]
+            c1 = np.logical_or(bb[0, 0] <= coords[0], bb[1, 0] <= coords[0])  # left_top/left_bottom.x <= coordinate.x
+            c2 = np.logical_or(bb[2, 0] >= coords[0], bb[3, 0] >= coords[0])  # right_bottom/right_top.x >= coordinate.x
+            c3 = np.logical_or(bb[1, 1] <= coords[1],
+                               bb[2, 1] <= coords[1])  # left_bottom/right_bottom.y <= coordinate.y
+            c4 = np.logical_or(bb[3, 1] >= coords[1], bb[0, 1] >= coords[1])  # right_top/left_top.y >= coordinate.y
+
+            c = np.logical_and(np.logical_and(c1, c2),
+                               np.logical_and(c3, c4))
+
+            bb_targets_single_rv[:, :, c] = np.expand_dims(bb, 2)
+        bb_targets.append(bb_targets_single_rv.transpose((2, 3, 0, 1)))
+
+    return np.array(bb_targets)
