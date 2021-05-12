@@ -1,9 +1,8 @@
 import numpy as np
 import pandas as pd
 from os.path import join
-from pyquaternion import Quaternion
 
-from .settings import DATASET_PATH, NUSCENES
+from .settings import DATASET_PATH, NUSCENES, LABEL_NUMBER
 
 
 def sample_to_rangeview(sample: dict,
@@ -17,7 +16,7 @@ def sample_to_rangeview(sample: dict,
         Each of 5 channels is responsible for a single interesting feature:
         range, height, azimuth, intensity and flag indicating whether there is a point or not
 
-        Lookup into each of feature matrices looks like matrice[laser_number][azimuth_bin]
+        Lookup into each of feature matrices looks like matrix[laser_number][azimuth_bin]
     """
 
     sample_data_token = sample['data']['LIDAR_TOP']
@@ -74,7 +73,9 @@ def sample_to_rangeview(sample: dict,
         .unstack(fill_value=df_len).stack().values
     points_df = points_df.loc[idx_min]
 
-    point_labels = points_df['class'].values.reshape((height, width))
+    # class 0 is for noise
+    point_labels = pd.get_dummies(points_df['class']).T.reindex(range(LABEL_NUMBER)).T.fillna(0)
+    point_labels = point_labels.values.reshape((height, width, LABEL_NUMBER))
 
     points_df.drop(['class', 'ring_index', 'azimuth_bin'], inplace=True, axis=1)
 

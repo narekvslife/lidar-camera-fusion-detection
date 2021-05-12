@@ -171,7 +171,6 @@ def get_bb_targets(coordinates, bounding_boxes):
     bounding_boxes.shape (N, M_n, 4, 3) where M_n is different for each N
     """
     bb_targets = []
-    print(coordinates.shape)
     n, _, rv_width, rv_height = coordinates.shape
     for cs_i in range(n):
         bb_targets_single_rv = np.zeros((4, 3, rv_width, rv_height))
