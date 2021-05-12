@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from pyquaternion import Quaternion
 
-from .settings import NUSCENES
+from .settings import NUSCENES, RV_WIDTH, RV_HEIGHT, LABEL_NUMBER
 
 
 def rotation_matrix(angles: torch.Tensor):
@@ -138,8 +138,8 @@ def get_front_bb(sample: dict):
     cs_translation = -np.array(cs_record['translation'])
 
     corners = []
+    bb_labels = []
     for box in sample_annotation:
-
         box.translate(ego_translation)
         box.rotate(Quaternion(ego_record['rotation']).inverse)
 
@@ -161,38 +161,52 @@ def get_front_bb(sample: dict):
             continue
 
         corners.append(box.bottom_corners())
+        bb_labels.append(NUSCENES.lidarseg_name2idx_mapping[box.name])
 
-    return np.transpose(np.array(corners).T, (2, 0, 1))
+    return np.transpose(np.array(corners).T, (2, 0, 1)), np.array(bb_labels)
 
 
-def get_bb_targets(coordinates, bounding_boxes):
+def get_bb_targets(coordinates, bounding_box_corners, bounding_box_labels):
     """
     coordinate.shape (N, 3, RV_WIDTH, RV_HEIGHT)
-    bounding_boxes.shape (N, M_n, 4, 3) where M_n is different for each N
+    bounding_box_corners.shape (N, M_n, 4, 3) where M_n is different for each N
+    bounding_box_labeles.shape (N, M_n, 1) where M_n is different for each N
     """
+
     bb_targets = []
-    n, _, rv_width, rv_height = coordinates.shape
-    for cs_i in range(n):
-        bb_targets_single_rv = np.zeros((4, 3, rv_width, rv_height))
-        for bb in bounding_boxes[cs_i]:  # bounding_boxes[cs_i] - bounding box corners for according point cloud
-            # bb[0] - left_top coordinates
-            # bb[1] - left_bottom coordinates
-            # bb[2] - right_bottom coordinates
-            # bb[3] - right_top coordinates
+    for sample_i in range(len(coordinates)):
+        bbc_targets_single_rv = np.zeros((4, 3, RV_WIDTH, RV_HEIGHT))
+        bbl_targets_single_rv = np.zeros((LABEL_NUMBER, RV_WIDTH, RV_HEIGHT))
 
-            # bb[x][0] - x coordinate
-            # bb[x][1] - y coordinate
+        sample_coords = coordinates[sample_i]
+        s_coords_x = sample_coords[0]
+        s_coords_y = sample_coords[1]
 
-            coords = coordinates[cs_i]
-            c1 = np.logical_or(bb[0, 0] <= coords[0], bb[1, 0] <= coords[0])  # left_top/left_bottom.x <= coordinate.x
-            c2 = np.logical_or(bb[2, 0] >= coords[0], bb[3, 0] >= coords[0])  # right_bottom/right_top.x >= coordinate.x
-            c3 = np.logical_or(bb[1, 1] <= coords[1], bb[2, 1] <= coords[1])  # left/right_bottom.y <= coordinate.y
-            c4 = np.logical_or(bb[3, 1] >= coords[1], bb[0, 1] >= coords[1])  # right_top/left_top.y >= coordinate.y
+        sample_boxes_corners = bounding_box_corners[sample_i]
+        sample_boxes_labels = bounding_box_labels[sample_i]
+
+        # bounding_box_corners[cs_i] - bounding box corners for according point cloud
+        for bb_i in range(len(sample_boxes_corners)):
+            bb_c = sample_boxes_corners[bb_i]  # bb_c[left_top, left_bottom, right_bottom, right_top]
+            bb_l = sample_boxes_labels[bb_i]
+
+            c1 = np.logical_or(bb_c[0, 0] <= s_coords_x,
+                               bb_c[1, 0] <= s_coords_x)  # left_top/left_bottom.x <= coordinate.x
+            c2 = np.logical_or(bb_c[2, 0] >= s_coords_x,
+                               bb_c[3, 0] >= s_coords_x)  # right_bottom/right_top.x >= coordinate.x
+            c3 = np.logical_or(bb_c[1, 1] <= s_coords_y,
+                               bb_c[2, 1] <= s_coords_y)  # left/right_bottom.y <= coordinate.y
+            c4 = np.logical_or(bb_c[3, 1] >= s_coords_y,
+                               bb_c[0, 1] >= s_coords_y)  # right_top/left_top.y >= coordinate.y
 
             c = np.logical_and(np.logical_and(c1, c2),
                                np.logical_and(c3, c4))
 
-            bb_targets_single_rv[:, :, c] = np.expand_dims(bb, 2)
-        bb_targets.append(bb_targets_single_rv.transpose((2, 3, 0, 1)))
+            bbc_targets_single_rv[:, :, c] = np.expand_dims(bb_c, 2)
+            bbl_targets_single_rv[bb_l, c] = 1
+
+        bbc_targets_single_rv = bbc_targets_single_rv[:, :2].reshape((8, RV_WIDTH, RV_HEIGHT))
+
+        bb_targets.append(np.vstack((bbc_targets_single_rv, bbl_targets_single_rv)))
 
     return np.array(bb_targets)
