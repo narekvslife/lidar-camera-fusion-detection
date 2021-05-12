@@ -186,8 +186,7 @@ def get_bb_targets(coordinates, bounding_boxes):
             coords = coordinates[cs_i]
             c1 = np.logical_or(bb[0, 0] <= coords[0], bb[1, 0] <= coords[0])  # left_top/left_bottom.x <= coordinate.x
             c2 = np.logical_or(bb[2, 0] >= coords[0], bb[3, 0] >= coords[0])  # right_bottom/right_top.x >= coordinate.x
-            c3 = np.logical_or(bb[1, 1] <= coords[1],
-                               bb[2, 1] <= coords[1])  # left_bottom/right_bottom.y <= coordinate.y
+            c3 = np.logical_or(bb[1, 1] <= coords[1], bb[2, 1] <= coords[1])  # left/right_bottom.y <= coordinate.y
             c4 = np.logical_or(bb[3, 1] >= coords[1], bb[0, 1] >= coords[1])  # right_top/left_top.y >= coordinate.y
 
             c = np.logical_and(np.logical_and(c1, c2),
