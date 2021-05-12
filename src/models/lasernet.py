@@ -26,13 +26,18 @@ class LaserNet(nn.Module):
 
         # relative center (x, y), relative orientation (wx, wy) = (cos w, sin w), and dimensions l, w
         # + one channel for each class label
-        self.bb_params = nn.Conv2d(in_channels=128,
-                                   out_channels=6 + self.num_classes,
-                                   kernel_size=(1, 1))
+        self.bb_params = nn.Sequential(
+            nn.BatchNorm2d(128),
+            nn.Conv2d(in_channels=128,
+                      out_channels=6 + self.num_classes,
+                      kernel_size=(1, 1)),
+            nn.LeakyReLU())
 
-        self.log_stds = nn.Conv2d(in_channels=128,
-                                  out_channels=1,
-                                  kernel_size=(1, 1))
+        self.log_stds = nn.Sequential(
+            nn.BatchNorm2d(128),
+            nn.Conv2d(in_channels=128, out_channels=1, kernel_size=(128, 32)),
+            nn.LeakyReLU()
+        )
 
     def forward(self, x: torch.Tensor, coordinates: torch.Tensor) -> tuple:
         """
@@ -45,7 +50,7 @@ class LaserNet(nn.Module):
 
         class_preds = self.classes(dla_out)
         bb_preds = self.bb_params(dla_out)
-        log_stds = self.log_stds(dla_out)
+        log_stds = self.log_stds(dla_out).squeeze()
 
         # azimuth angle is feature [2] out of 5 channels
         angles = x[:, 2, :, :]
