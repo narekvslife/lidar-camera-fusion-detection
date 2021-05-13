@@ -17,6 +17,8 @@ def sample_to_rangeview(sample: dict,
         range, height, azimuth, intensity and flag indicating whether there is a point or not
 
         Lookup into each of feature matrices looks like matrix[laser_number][azimuth_bin]
+        
+        returns: the range_view, coordinates of points which got to the rv, labels of those points
     """
 
     sample_data_token = sample['data']['LIDAR_TOP']
@@ -29,8 +31,6 @@ def sample_to_rangeview(sample: dict,
     # loading directly from files to perceive the ring_index information
     points_raw = np.fromfile(DATASET_PATH + my_sample_lidar_data["filename"], dtype=np.float32).reshape((-1, 5))
     point_labels = np.fromfile(lidarseg_labels_filename, dtype=np.uint8)
-
-    assert (points_raw.shape[1] == 5)
 
     points_df = pd.DataFrame(points_raw, columns=['x', 'y', 'z',
                                                   'intensity', 'ring_index'])
@@ -65,37 +65,37 @@ def sample_to_rangeview(sample: dict,
     # Finally construct the Range View image
     # First, we construct 4 channels: height, intensity, aziumth, distance
     image = np.zeros((height, width, 5))
-    #     try:
-    # row numbers of points which have minimal distance in their groups
+    try:
+        # row numbers of points which have minimal distance in their groups
 
-    idx_min = points_df.groupby(['ring_index', 'azimuth_bin']) \
-        .distance.idxmin() \
-        .unstack(fill_value=df_len).stack().values
-    points_df = points_df.loc[idx_min]
+        idx_min = points_df.groupby(['ring_index', 'azimuth_bin']) \
+            .distance.idxmin() \
+            .unstack(fill_value=df_len).stack().values
+        points_df = points_df.loc[idx_min]
 
-    # class 0 is for noise
-    point_labels = pd.get_dummies(points_df['class']).T.reindex(range(LABEL_NUMBER)).T.fillna(0)
-    point_labels = point_labels.values.reshape((height, width, LABEL_NUMBER))
+        # class 0 is for noise
+        point_labels = pd.get_dummies(points_df['class']).T.reindex(range(LABEL_NUMBER)).T.fillna(0)
+        point_labels = point_labels.values.reshape((height, width, LABEL_NUMBER))
 
-    points_df.drop(['class', 'ring_index', 'azimuth_bin'], inplace=True, axis=1)
+        points_df.drop(['class', 'ring_index', 'azimuth_bin'], inplace=True, axis=1)
 
-    points_features = points_df.values.reshape((height, width, 6))
+        points_features = points_df.values.reshape((height, width, 6))
 
-    # first 3 columns were abs_x, abs_y, abs_z
-    point_coordinates = np.zeros((height, width, 3))
-    point_coordinates[:, :, :2] = points_features[:, :, :2]
+        # first 3 columns were abs_x, abs_y, abs_z
+        point_coordinates = np.zeros((height, width, 3))
+        point_coordinates[:, :, :2] = points_features[:, :, :2]
 
-    # here are the 4 channels: distance, azimuth, reflectance, and height
-    image[:, :, :4] = points_features[:, :, 2:]
+        # here are the 4 channels: distance, azimuth, reflectance, and height
+        image[:, :, :4] = points_features[:, :, 2:]
 
-    # 5th channel is a flag which shows whether there is a point or not.
-    # If distance == azimuth == ring_index == 0 => no point
-    image[:, :, 4] = (image[:, :, :].sum(axis=2) != 0).astype(int)
+        # 5th channel is a flag which shows whether there is a point or not.
+        # If distance == azimuth == ring_index == 0 => no point
+        image[:, :, 4] = (image[:, :, :].sum(axis=2) != 0).astype(int)
 
-    assert image.shape[: 2] == point_coordinates.shape[: 2]
+        assert image.shape[: 2] == point_coordinates.shape[: 2]
 
-    #     except ValueError:
-    #         print(sample['token'])
+    except ValueError:
+        print(sample['token'])
 
     # need to reflect x and y, so it matches camera view
     return image[::-1, ::-1, :], point_coordinates[::-1, ::-1, ::], point_labels[::-1, ::-1]
