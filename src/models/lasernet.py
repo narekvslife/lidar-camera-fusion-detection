@@ -39,14 +39,16 @@ class LaserNet(nn.Module):
             nn.LeakyReLU()
         )
 
-    def forward(self, x: torch.Tensor, coordinates: torch.Tensor) -> tuple:
+    def forward(self, x: torch.Tensor) -> tuple:
         """
-            x - tensor of size (N, 5, width, height) with main features
-            coordinates - tensor of size (N, 2, width, height) containing x, y coordinates of points,
-                          which are in the according cell of the X vector
+            x - tensor of size (N, 7, width, height) with main features
+                7 for (x, y, height(z), intensity, aziumth, distance
         """
-
-        dla_out = self.dla(x)
+        
+        coordinates = x[:, :2]
+        x_range_view = x[:, 2:]
+        
+        dla_out = self.dla(x_range_view)
 
         class_preds = self.classes(dla_out)
         bb_preds = self.bb_params(dla_out)
