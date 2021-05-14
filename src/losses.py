@@ -60,4 +60,4 @@ class LaserNetLoss(torch.nn.Module):
         L_box_corners = self.bb_reg_loss(y_bb_preds, y_bb_target, y_std_preds)
 
         L_logstd = torch.sqrt(self.mse(y_std_preds, y_std_target))
-        return torch.mean(L_point_cls + L_box_corners + L_logstd, axis=0)
+        return torch.mean(L_point_cls + L_box_corners + L_logstd)
