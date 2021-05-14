@@ -12,7 +12,7 @@ def rotation_matrix(angles: torch.Tensor):
     :return:
     """
 
-    theta = torch.deg2rad(angles)
+    theta = torch.rad2deg(angles)
     cos, sin = torch.cos(theta), torch.sin(theta)
 
     s1 = torch.stack((cos, -sin))
@@ -189,22 +189,23 @@ def get_bb_targets(coordinates, bounding_box_corners, bounding_box_labels):
         for bb_i in range(len(sample_boxes_corners)):
             bb_c = sample_boxes_corners[bb_i]  # bb_c[left_top, left_bottom, right_bottom, right_top]
             bb_l = sample_boxes_labels[bb_i]
-
-            c1 = np.logical_or(bb_c[0, 0] <= s_coords_x,
-                               bb_c[1, 0] <= s_coords_x)  # left_top/left_bottom.x <= coordinate.x
-            c2 = np.logical_or(bb_c[2, 0] >= s_coords_x,
-                               bb_c[3, 0] >= s_coords_x)  # right_bottom/right_top.x >= coordinate.x
-            c3 = np.logical_or(bb_c[1, 1] <= s_coords_y,
-                               bb_c[2, 1] <= s_coords_y)  # left/right_bottom.y <= coordinate.y
-            c4 = np.logical_or(bb_c[3, 1] >= s_coords_y,
-                               bb_c[0, 1] >= s_coords_y)  # right_top/left_top.y >= coordinate.y
-
+            
+            min_bb_x = bb_c[:, 0].min()
+            max_bb_x = bb_c[:, 0].max()
+            min_bb_y = bb_c[:, 1].min()
+            max_bb_y = bb_c[:, 1].max()
+        
+            c1 = min_bb_x <= s_coords_x  # left_top/left_bottom.x <= coordinate.x
+            c2 = max_bb_x >= s_coords_x  # right_bottom/right_top.x >= coordinate.x
+            c3 = min_bb_y <= s_coords_y  # left/right_bottom.y <= coordinate.y
+            c4 = max_bb_y >= s_coords_y  # right_top/left_top.y >= coordinate.y
+            
             c = np.logical_and(np.logical_and(c1, c2),
                                np.logical_and(c3, c4))
 
             bbc_targets_single_rv[:, :, c] = np.expand_dims(bb_c, 2)
-            bbl_targets_single_rv[bb_l, c] = 1
 
+            bbl_targets_single_rv[bb_l, c] = 1
         bbc_targets_single_rv = bbc_targets_single_rv[:, :2].reshape((8, RV_WIDTH, RV_HEIGHT))
 
         bb_targets.append(np.vstack((bbc_targets_single_rv, bbl_targets_single_rv)))
