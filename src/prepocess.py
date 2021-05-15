@@ -93,8 +93,3 @@ def sample_to_rangeview(sample: dict) -> np.array:
     point_labels = np.fromfile(lidarseg_labels_filename, dtype=np.uint8)
 
     return pcl_to_rangeview(points_raw, point_labels)
-
-
-
-
-
