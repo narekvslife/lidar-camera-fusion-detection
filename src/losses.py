@@ -49,7 +49,7 @@ class LaserNetLoss(torch.nn.Module):
 
         self.focal_loss = FocalLoss(alpha=f_alpha, gamma=f_gamma, logits=logits, reduce=reduce)
         self.bb_reg_loss = BoundingBoxRegressionLoss()
-        self.mse = torch.nn.MSELoss()
+        self.mse = torch.nn.MSELoss(reduction='mean')
 
     def forward(self,
                 y_pointclass_preds, y_bb_preds, y_std_preds,

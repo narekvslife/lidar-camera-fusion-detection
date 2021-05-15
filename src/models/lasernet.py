@@ -29,7 +29,7 @@ class LaserNet(nn.Module):
         self.bb_params = nn.Sequential(
             nn.BatchNorm2d(128),
             nn.Conv2d(in_channels=128,
-                      out_channels=6 + self.num_classes,
+                      out_channels=6,
                       kernel_size=(1, 1)),
             nn.LeakyReLU())
 
@@ -54,18 +54,16 @@ class LaserNet(nn.Module):
         bb_preds = self.bb_params(dla_out)
         log_stds = self.log_stds(dla_out).squeeze()
 
-        # azimuth angle is feature [2] out of 5 channels
-        angles = x[:, 2, :, :]
+        # azimuth angle is feature [4] out of 5 channels
+        angles = x[:, 4, :, :]
 
-        # bb_params is of size [N, 6 + self.num_classes, RV_WIDTH, RV_HEIGHT]
+        # bb_preds is of size [N, 6, RV_WIDTH, RV_HEIGHT]
         # for each point on the RV, and each mixture component K we predict 6 params of a bounding box
         # these are relative to the camera frame, we need to turn them to absolute space
         # and we want to get 4 box corners instead of 6 params
-
-        bb_corners = params_to_box_corners(bb_preds[:, :6],
+        
+        bb_corners = params_to_box_corners(bb_preds,
                                            coordinates[:, :2],
                                            angles)
 
-        bb_preds = torch.cat((bb_corners, bb_preds[:, 6:]), 1)
-
-        return class_preds, bb_preds, log_stds
+        return class_preds, bb_corners, log_stds

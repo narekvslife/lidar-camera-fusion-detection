@@ -22,7 +22,7 @@ class FeatureExtractorBlock(nn.Module):
         self.residual_block = ResidualConv3x3Block(out_channels, out_channels)
 
     def forward(self, x: Tensor) -> Tensor:
-
+        
         out = self.first_conv_block(x)
         transformed_x = self.transformed_x(x)
 

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from os.path import join
 
-from .settings import DATASET_PATH, NUSCENES, LABEL_NUMBER
+from .settings import DATASET_PATH, NUSCENES, LABEL_NUMBER, RV_HEIGHT, RV_WIDTH
 
 
 def pcl_to_rangeview(pcl_features: np.array, pcl_labels: np.array):
@@ -41,19 +41,18 @@ def pcl_to_rangeview(pcl_features: np.array, pcl_labels: np.array):
     # Finally construct the Range View
     # First, we construct 7 channels: x, y, height(z), intensity, aziumth, distance
     range_view = np.zeros((RV_HEIGHT, RV_WIDTH, 7))
+  
+    # row numbers of points which have minimal distance in their groups
+
+    idx_min = points_df.groupby(['ring_index', 'azimuth_bin']) \
+        .distance.idxmin() \
+        .unstack(fill_value=df_len).stack().values
+    points_df = points_df.loc[idx_min]
+
+    # class 0 is for noised
+    point_labels = pd.get_dummies(points_df['class']).T.reindex(range(LABEL_NUMBER)).T.fillna(0)
+    points_df.drop(['class', 'ring_index', 'azimuth_bin'], inplace=True, axis=1)
     try:
-        # row numbers of points which have minimal distance in their groups
-
-        idx_min = points_df.groupby(['ring_index', 'azimuth_bin']) \
-            .distance.idxmin() \
-            .unstack(fill_value=df_len).stack().values
-        points_df = points_df.loc[idx_min]
-
-        # class 0 is for noise
-        point_labels = pd.get_dummies(points_df['class']).T.reindex(range(LABEL_NUMBER)).T.fillna(0)
-
-        points_df.drop(['class', 'ring_index', 'azimuth_bin'], inplace=True, axis=1)
-
         range_view[:, :, :6] = points_df.values.reshape((RV_HEIGHT, RV_WIDTH, 6))
         point_labels = point_labels.values.reshape((RV_HEIGHT, RV_WIDTH, LABEL_NUMBER))
 
@@ -61,9 +60,8 @@ def pcl_to_rangeview(pcl_features: np.array, pcl_labels: np.array):
         # If distance == azimuth == ring_index == 0 => no point
         range_view[:, :, 6] = (range_view[:, :, :].sum(axis=2) != 0).astype(int)
 
-
     except ValueError:
-        print(sample['token'])
+        return np.zeros((RV_HEIGHT, RV_WIDTH, LABEL_NUMBER)), np.zeros((RV_HEIGHT, RV_WIDTH, LABEL_NUMBER))
 
     # need to reflect x and y, so it matches camera view
     return range_view[::-1, ::-1, :], point_labels[::-1, ::-1]
@@ -95,5 +93,8 @@ def sample_to_rangeview(sample: dict) -> np.array:
     point_labels = np.fromfile(lidarseg_labels_filename, dtype=np.uint8)
 
     return pcl_to_rangeview(points_raw, point_labels)
+
+
+
 
 

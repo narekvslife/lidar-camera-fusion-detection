@@ -12,8 +12,7 @@ def rotation_matrix(angles: torch.Tensor):
     :return:
     """
 
-    theta = torch.rad2deg(angles)
-    cos, sin = torch.cos(theta), torch.sin(theta)
+    cos, sin = torch.cos(angles), torch.sin(angles)
 
     s1 = torch.stack((cos, -sin))
     s2 = torch.stack((cos, sin))
@@ -33,8 +32,8 @@ def params_to_coordinates(point_center_params: torch.Tensor,
     :param angles:
     :return:
     """
-
     rotation_matrices = rotation_matrix(angles)  # torch.Size([2, 2, N, 256, 32])
+
     rotation_matrices = rotation_matrices.permute(2, 4, 3, 0, 1)  # torch.Size([N, 32, 256, 2, 2])
 
 #     print(rotation_matrices.shape, centerX_centerY.shape, coordinates.shape)
@@ -103,7 +102,7 @@ def params_to_box_corners(bb_params: torch.Tensor,
                          bb_params[:, 2], bb_params[:, 3],
                          bb_params[:, 4], bb_params[:, 5])
 
-    # TODO: to class(?)
+
     bb_abs_center_coords = params_to_coordinates(point_centers_xy, point_coordinates, angles)
 
     bb_abs_orientation = angles + torch.atan2(w_y, w_x)
@@ -116,7 +115,7 @@ def params_to_box_corners(bb_params: torch.Tensor,
     return bb_abs_corners
 
 
-def get_front_bb(sample: dict):
+def get_front_bb(sample: dict, nusc):
     """
     Function computes and returns
     An array of points points of a bounding box in sensor coordinates.
@@ -125,11 +124,11 @@ def get_front_bb(sample: dict):
     :param sample: nuscenes sample dictionary
     :return: np.array of shape (N, 8, 3)
     """
-    my_sample_lidar_data = NUSCENES.get('sample_data', sample['data']['LIDAR_TOP'])
-    sample_annotation = NUSCENES.get_boxes(my_sample_lidar_data['token'])
+    my_sample_lidar_data = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
+    sample_annotation = nusc.get_boxes(my_sample_lidar_data['token'])
 
-    ego_record = NUSCENES.get('ego_pose', my_sample_lidar_data['ego_pose_token'])
-    cs_record = NUSCENES.get('calibrated_sensor', my_sample_lidar_data['calibrated_sensor_token'])
+    ego_record = nusc.get('ego_pose', my_sample_lidar_data['ego_pose_token'])
+    cs_record = nusc.get('calibrated_sensor', my_sample_lidar_data['calibrated_sensor_token'])
 
     # first step: transform from absolute to ego
     ego_translation = -np.array(ego_record['translation'])
@@ -138,7 +137,6 @@ def get_front_bb(sample: dict):
     cs_translation = -np.array(cs_record['translation'])
 
     corners = []
-    bb_labels = []
     for box in sample_annotation:
         box.translate(ego_translation)
         box.rotate(Quaternion(ego_record['rotation']).inverse)
@@ -161,12 +159,15 @@ def get_front_bb(sample: dict):
             continue
 
         corners.append(box.bottom_corners())
-        bb_labels.append(NUSCENES.lidarseg_name2idx_mapping[box.name])
+        
+    return np.transpose(np.array(corners).T, (2, 0, 1))
 
-    return np.transpose(np.array(corners).T, (2, 0, 1)), np.array(bb_labels)
+#         bb_labels.append(NUSCENES.lidarseg_name2idx_mapping[box.name])
+
+#     return np.transpose(np.array(corners).T, (2, 0, 1)), np.array(bb_labels)
 
 
-def get_bb_targets(coordinates, bounding_box_corners, bounding_box_labels):
+def get_bb_targets(coordinates, bounding_box_corners):
     """
     coordinate.shape (N, 3, RV_WIDTH, RV_HEIGHT)
     bounding_box_corners.shape (N, M_n, 4, 3) where M_n is different for each N
@@ -176,20 +177,17 @@ def get_bb_targets(coordinates, bounding_box_corners, bounding_box_labels):
     bb_targets = []
     for sample_i in range(len(coordinates)):
         bbc_targets_single_rv = np.zeros((4, 3, RV_WIDTH, RV_HEIGHT))
-        bbl_targets_single_rv = np.zeros((LABEL_NUMBER, RV_WIDTH, RV_HEIGHT))
 
         sample_coords = coordinates[sample_i]
         s_coords_x = sample_coords[0]
         s_coords_y = sample_coords[1]
 
         sample_boxes_corners = bounding_box_corners[sample_i]
-        sample_boxes_labels = bounding_box_labels[sample_i]
 
         # bounding_box_corners[cs_i] - bounding box corners for according point cloud
         for bb_i in range(len(sample_boxes_corners)):
             bb_c = sample_boxes_corners[bb_i]  # bb_c[left_top, left_bottom, right_bottom, right_top]
-            bb_l = sample_boxes_labels[bb_i]
-            
+
             min_bb_x = bb_c[:, 0].min()
             max_bb_x = bb_c[:, 0].max()
             min_bb_y = bb_c[:, 1].min()
@@ -205,9 +203,8 @@ def get_bb_targets(coordinates, bounding_box_corners, bounding_box_labels):
 
             bbc_targets_single_rv[:, :, c] = np.expand_dims(bb_c, 2)
 
-            bbl_targets_single_rv[bb_l, c] = 1
         bbc_targets_single_rv = bbc_targets_single_rv[:, :2].reshape((8, RV_WIDTH, RV_HEIGHT))
 
-        bb_targets.append(np.vstack((bbc_targets_single_rv, bbl_targets_single_rv)))
+        bb_targets.append(bbc_targets_single_rv)
 
     return np.array(bb_targets)
