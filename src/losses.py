@@ -50,13 +50,12 @@ class LaserNetLoss(torch.nn.Module):
 
     def forward(self,
                 y_pointclass_preds, y_bb_preds, y_std_preds,
-                y_pointclass_target, y_bb_target, y_std_target):
+                y_pointclass_target, y_bb_target):
         # for now we ignore the bb classification task and do not use bb labels
 
         L_point_cls = self.focal_loss(inputs=y_pointclass_preds, 
                                       targets=y_pointclass_target)
+        
         L_box_corners = self.bb_reg_loss(y_bb_preds, y_bb_target, y_std_preds)
 
-        L_logstd = torch.sqrt(self.mse(y_std_preds, y_std_target))
-        
-        return torch.mean(L_point_cls + L_box_corners + L_logstd)
+        return torch.mean(L_point_cls + L_box_corners)

@@ -17,8 +17,6 @@ class FeatureExtractorBlock(nn.Module):
             bn_conv3x3(in_channels=out_channels, out_channels=out_channels),
         )
         self.transformed_x = bn_conv3x3(in_channels=in_channels, out_channels=out_channels, stride=stride)
-        self.elu = nn.ELU()
-
         self.residual_block = ResidualConv3x3Block(out_channels, out_channels)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -27,7 +25,6 @@ class FeatureExtractorBlock(nn.Module):
         transformed_x = self.transformed_x(x)
 
         out += transformed_x
-        out = self.elu(out)
 
         for _ in range(6):
             out = self.residual_block(out)
