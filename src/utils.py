@@ -71,12 +71,12 @@ def params_to_corners(bb_center_coords: torch.Tensor,
 
 #     print("bb_abs_center_coords:", bb_abs_center_coords.shape, "bn:", b1.squeeze(4).permute(0, 3, 1, 2).shape)
 
-    b1 = bb_center_coords + b1.squeeze(4).permute(0, 3, 1, 2)  # TODO:
-    b2 = bb_center_coords + b2.squeeze(4).permute(0, 3, 1, 2)  # TODO:
-    b3 = bb_center_coords + b3.squeeze(4).permute(0, 3, 1, 2)  # TODO:
-    b4 = bb_center_coords + b4.squeeze(4).permute(0, 3, 1, 2)  # TODO:
+    b1 = bb_center_coords + b1.squeeze(4).permute(0, 3, 1, 2) / 2  # TODO:
+    b2 = bb_center_coords + b2.squeeze(4).permute(0, 3, 1, 2) / 2 # TODO:
+    b3 = bb_center_coords + b3.squeeze(4).permute(0, 3, 1, 2) / 2 # TODO:
+    b4 = bb_center_coords + b4.squeeze(4).permute(0, 3, 1, 2) / 2 # TODO:
 
-    b = torch.hstack((b1, b2, b3, b4)) / 2
+    b = torch.hstack((b1, b2, b3, b4))
 
     return b
 
@@ -103,7 +103,7 @@ def params_to_box_corners(bb_params: torch.Tensor,
 
     bb_abs_center_coords = params_to_coordinates(point_centers_xy, point_coordinates, angles)
 
-    bb_abs_orientation = angles + torch.atan2(w_y, w_x)
+    bb_abs_orientation = angles + torch.rad2deg(torch.atan2(w_y, w_x))
 
     bb_abs_corners = params_to_corners(bb_abs_center_coords,
                                        bb_abs_orientation,
