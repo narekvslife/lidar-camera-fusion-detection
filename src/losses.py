@@ -14,10 +14,10 @@ class FocalLoss(torch.nn.Module):
         targets = torch.argmax(targets.reshape((n_samples, n_classes, -1)), axis=1)
         inputs = inputs.reshape((n_samples, n_classes, -1))
         
-        ce_loss = F.cross_entropy(inputs, targets.type(torch.long), reduction=self.reduction)  # == -log(pt)
+        ce_loss = F.cross_entropy(inputs, targets.type(torch.long), reduction='none')  # == -log(pt)
         pt = torch.exp(-ce_loss)
-        f_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
-
+        
+        f_loss = torch.mean(self.alpha * (1 - pt) ** self.gamma * ce_loss, dim=(1, 2, 3))
         return f_loss
 
 class BoundingBoxRegressionLoss(torch.nn.Module):
@@ -30,14 +30,11 @@ class BoundingBoxRegressionLoss(torch.nn.Module):
 
         std_preds - predicted log standart deviations of bounding box corners
         """
-        
         if len(inputs.shape) == 0:
             return torch.tensor(0)
-
         one_over_sigma = torch.exp(-std_preds).unsqueeze(1).unsqueeze(2).unsqueeze(3)
         std_preds = std_preds.unsqueeze(1).unsqueeze(2).unsqueeze(3)
-        
-        box_losses = torch.mean(one_over_sigma * (torch.abs(inputs - targets) + std_preds))
+        box_losses = torch.mean(one_over_sigma * torch.abs(inputs - targets) + std_preds, dim=(1, 2, 3))
         return box_losses
 
 
@@ -62,8 +59,13 @@ class LaserNetLoss(torch.nn.Module):
         
         L_point_cls = self.focal_loss(inputs=y_pointclass_preds, 
                                       targets=y_pointclass_target)
-        
+        print("0|", L_point_cls.shape)
+
         L_box_corners = self.bb_reg_loss(y_bb_preds[n, :, w, h], y_bb_target[n, :, w, h], y_std_preds)
+        print("1|", L_box_corners.shape)
+
+
+#         print('|point_classification_loss|', L_point_cls.item(), '|bounding_box_loss|', L_box_corners.item())
 
         return torch.mean(L_point_cls + L_box_corners)
 
