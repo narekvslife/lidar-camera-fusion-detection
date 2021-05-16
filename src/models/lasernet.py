@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-from ..utils import params_to_box_corners
-from ..settings import LABEL_NUMBER
-from .dla import DeepLayerAggregation
+from src.utils import params_to_box_corners
+from src.settings import LABEL_NUMBER
+from src.models.dla import DeepLayerAggregation
 
 
 class LaserNet(nn.Module):

@@ -9,7 +9,6 @@ class FocalLoss(torch.nn.Module):
         self.reduction = reduction
 
     def forward(self, inputs, targets):
-        
         n_samples, n_classes, _, _ = inputs.shape
         
         targets = torch.argmax(targets.reshape((n_samples, n_classes, -1)), axis=1)
@@ -31,11 +30,14 @@ class BoundingBoxRegressionLoss(torch.nn.Module):
 
         std_preds - predicted log standart deviations of bounding box corners
         """
+        
+        if len(inputs.shape) == 0:
+            return torch.tensor(0)
 
         one_over_sigma = torch.exp(-std_preds).unsqueeze(1).unsqueeze(2).unsqueeze(3)
         std_preds = std_preds.unsqueeze(1).unsqueeze(2).unsqueeze(3)
-
-        box_losses = torch.sum(one_over_sigma * (torch.abs(inputs - targets) + std_preds))
+        
+        box_losses = torch.mean(one_over_sigma * (torch.abs(inputs - targets) + std_preds))
         return box_losses
 
 
@@ -46,16 +48,22 @@ class LaserNetLoss(torch.nn.Module):
 
         self.focal_loss = FocalLoss(alpha=f_alpha, gamma=f_gamma, reduction=focal_loss_reduction)
         self.bb_reg_loss = BoundingBoxRegressionLoss()
-        self.mse = torch.nn.MSELoss(reduction='mean')
+        self.non_object_labels = [0, 24, 25, 26, 27, 28, 29, 30, 31]
 
     def forward(self,
                 y_pointclass_preds, y_bb_preds, y_std_preds,
                 y_pointclass_target, y_bb_target):
-        # for now we ignore the bb classification task and do not use bb labels
-
+        
+        
+        point_pred_labels = torch.argmax(y_pointclass_target, axis=1)
+        
+        # sample_index, rv_width_index, rv_height_index of points that are on the detectable objecet
+        n, w, h = torch.nonzero(sum(point_pred_labels != nol for nol in self.non_object_labels)).T
+        
         L_point_cls = self.focal_loss(inputs=y_pointclass_preds, 
                                       targets=y_pointclass_target)
         
-        L_box_corners = self.bb_reg_loss(y_bb_preds, y_bb_target, y_std_preds)
+        L_box_corners = self.bb_reg_loss(y_bb_preds[n, :, w, h], y_bb_target[n, :, w, h], y_std_preds)
 
         return torch.mean(L_point_cls + L_box_corners)
+

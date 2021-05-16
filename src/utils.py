@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from pyquaternion import Quaternion
 
-from .settings import NUSCENES, RV_WIDTH, RV_HEIGHT, LABEL_NUMBER
+from src.settings import NUSCENES, RV_WIDTH, RV_HEIGHT, LABEL_NUMBER
 
 
 def rotation_matrix(angles: torch.Tensor):
@@ -33,7 +33,6 @@ def params_to_coordinates(point_center_params: torch.Tensor,
     :return:
     """
     rotation_matrices = rotation_matrix(angles)  # torch.Size([2, 2, N, 256, 32])
-
     rotation_matrices = rotation_matrices.permute(2, 4, 3, 0, 1)  # torch.Size([N, 32, 256, 2, 2])
 
 #     print(rotation_matrices.shape, centerX_centerY.shape, coordinates.shape)
@@ -101,7 +100,6 @@ def params_to_box_corners(bb_params: torch.Tensor,
      lengths, widths) = (bb_params[:, :2],
                          bb_params[:, 2], bb_params[:, 3],
                          bb_params[:, 4], bb_params[:, 5])
-
 
     bb_abs_center_coords = params_to_coordinates(point_centers_xy, point_coordinates, angles)
 

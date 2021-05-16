@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from os.path import join
 
-from .settings import DATASET_PATH, NUSCENES, LABEL_NUMBER, RV_HEIGHT, RV_WIDTH
+from src.settings import DATASET_PATH, NUSCENES, LABEL_NUMBER, RV_HEIGHT, RV_WIDTH
 
 
 def pcl_to_rangeview(pcl_features: np.array, pcl_labels: np.array):
@@ -61,7 +61,7 @@ def pcl_to_rangeview(pcl_features: np.array, pcl_labels: np.array):
         range_view[:, :, 6] = (range_view[:, :, :].sum(axis=2) != 0).astype(int)
 
     except ValueError:
-        return np.zeros((RV_HEIGHT, RV_WIDTH, LABEL_NUMBER)), np.zeros((RV_HEIGHT, RV_WIDTH, LABEL_NUMBER))
+        return np.zeros((RV_HEIGHT, RV_WIDTH, 7)), np.zeros((RV_HEIGHT, RV_WIDTH, LABEL_NUMBER))
 
     # need to reflect x and y, so it matches camera view
     return range_view[::-1, ::-1, :], point_labels[::-1, ::-1]

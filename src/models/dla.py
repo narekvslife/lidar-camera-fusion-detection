@@ -1,5 +1,5 @@
 from torch import nn, Tensor, cat
-from .helper_modules import bn_conv3x3, ResidualConv3x3Block
+from src.models.helper_modules import bn_conv3x3, ResidualConv3x3Block
 
 
 class FeatureExtractorBlock(nn.Module):

@@ -1,15 +1,14 @@
 import torch
 import torch.nn as nn
 
-
 def bn_conv3x3(in_channels: int,
                out_channels: int,
                stride: int = 1,
                padding: int = 1,
                activation=nn.LeakyReLU()):
     return nn.Sequential(
-        nn.BatchNorm2d(in_channels),
         nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=padding),
+        nn.BatchNorm2d(out_channels),
         activation)
 
 
