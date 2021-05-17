@@ -24,8 +24,7 @@ class ResidualConv3x3Block(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = bn_conv3x3(self.in_channels, self.out_channels, stride=self.stride)(x)
         out = bn_conv3x3(self.out_channels, self.out_channels, stride=self.stride)(out)
-        out = self.leaky_relu(out)
-
+        
         out += x
         out = self.leaky_relu(out)
 

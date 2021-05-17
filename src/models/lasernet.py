@@ -21,23 +21,16 @@ class LaserNet(nn.Module):
 
         self.dla = DeepLayerAggregation()
 
-        self.classes = nn.Sequential(
-            nn.Conv2d(128, self.num_classes, kernel_size=(1, 1)))  # no Softmax!
+        self.classes = nn.Conv2d(128, self.num_classes, kernel_size=(1, 1))
 
         # relative center (x, y), relative orientation (wx, wy) = (cos w, sin w), and dimensions l, w
         # + one channel for each class label
-        self.bb_params = nn.Sequential(
-            nn.BatchNorm2d(128),
-            nn.Conv2d(in_channels=128,
-                      out_channels=6,
-                      kernel_size=(1, 1)),
-            nn.LeakyReLU())
+        self.bb_params = nn.Conv2d(in_channels=128,
+                                   out_channels=6,
+                                   kernel_size=(1, 1))
+        
+        self.log_stds = nn.Conv2d(in_channels=128, out_channels=1, kernel_size=(128, 32))
 
-        self.log_stds = nn.Sequential(
-            nn.BatchNorm2d(128),
-            nn.Conv2d(in_channels=128, out_channels=1, kernel_size=(128, 32)),
-            nn.LeakyReLU()
-        )
 
     def forward(self, x: torch.Tensor) -> tuple:
         """
@@ -63,7 +56,7 @@ class LaserNet(nn.Module):
         # and we want to get 4 box corners instead of 6 params
         
         bb_corners = params_to_box_corners(bb_preds,
-                                           coordinates[:, :2],
+                                           coordinates,
                                            angles)
 
-        return class_preds, bb_corners, log_stds
+        return class_preds, bb_corners , log_stds
