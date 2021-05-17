@@ -29,7 +29,9 @@ class LaserNet(nn.Module):
                                    out_channels=6,
                                    kernel_size=(1, 1))
         
-        self.log_stds = nn.Conv2d(in_channels=128, out_channels=1, kernel_size=(128, 32))
+        self.log_stds = nn.Conv2d(in_channels=128, 
+                                  out_channels=1,
+                                  kernel_size=(1, 1))
 
 
     def forward(self, x: torch.Tensor) -> tuple:
