@@ -1,51 +1,50 @@
 import torch
 import numpy as np
 from pyquaternion import Quaternion
-
+import threading 
 from src.settings import NUSCENES, RV_WIDTH, RV_HEIGHT, LABEL_NUMBER
 
 
 def rotation_matrix(angles: torch.Tensor):
     """
-
     :param angles:
     :return:
     """
 
     cos, sin = torch.cos(angles), torch.sin(angles)
+    s1 = torch.stack((cos, -sin))  # 2xNx128x32
+    s2 = torch.stack((cos, sin))  # 2xNx128x32
+    
+    s3 = torch.stack((s1, s2)).squeeze(2) # 2x2xNx128x32
 
-    s1 = torch.stack((cos, -sin))
-    s2 = torch.stack((cos, sin))
+#     # check that stacking went as expected
+#     assert s3[0, 1, 0, 0, 0] == s1[1, 0, 0, 0]
+#     assert s3[1, 0, 0, 0, 0] == s2[0, 0, 0, 0]
+#     assert s3[1, 1, 0, 0, 0] == s2[1, 0, 0, 0]
 
-    s3 = torch.stack((s1, s2)).squeeze(2)
-    return s3
+    return s3  # 2x2xNxRV_WIDTHxRV_HEIGHT 
 
 
-def params_to_coordinates(point_center_params: torch.Tensor,
+def params_to_box_centers(point_center_params: torch.Tensor,
                           point_coordinates: torch.Tensor,
                           angles: torch.Tensor) -> torch.Tensor:  # 1
     """
-        this function converts relative bounding box parameters to absolute coordinates
+    this function converts relative bounding box parameters to coordinates
 
-    :param point_center_params:
-    :param point_coordinates:
+    :param point_center_params:  N x 2 x RV_WIDTH x RV_HEIGHT
+    :param point_coordinates: N x 2 x RV_WIDTH x RV_HEIGHT
     :param angles:
     :return:
     """
-    rotation_matrices = rotation_matrix(angles)  # torch.Size([2, 2, N, 256, 32])
-    rotation_matrices = rotation_matrices.permute(2, 4, 3, 0, 1)  # torch.Size([N, 32, 256, 2, 2])
+    rotation_matrices = rotation_matrix(angles)  # 2 x 2 x N x RV_WIDTH x RV_HEIGHT
+    rotation_matrices = rotation_matrices.permute(2, 3, 4, 0, 1)  # N x RV_WIDTH x RV_HEIGHT x 2 x 2
 
-#     print(rotation_matrices.shape, centerX_centerY.shape, coordinates.shape)
-#     torch.Size([2, 2, 10, 256, 32]) torch.Size([10, 2, 256, 32]) torch.Size([N, 2, 256, 32])
+    point_center_params = point_center_params.permute(0, 2, 3, 1).unsqueeze(4)  # N x RV_WIDTH x RV_HEIGHT x 2 x 1
+    point_coordinates = point_coordinates.permute(0, 2, 3, 1).unsqueeze(4)  # N x RV_WIDTH x RV_HEIGHT x 2 x 1
 
-    point_center_params = point_center_params.permute(0, 3, 2, 1).unsqueeze(4)  # TODO:
-    point_coordinates = point_coordinates.permute(0, 3, 2, 1).unsqueeze(4)  # TODO:
-
-#     torch.Size([2, 2, N, 256, 32]) torch.Size([N, 32, 256, 2, 1]) torch.Size([N, 32, 256, 2, 1])
-#     print("1| AC", absolute_coordinates.shape, "RM", rotation_matrices.shape, "point_centers", point_centers.shape)
-    abs_coords = point_coordinates + rotation_matrices @ point_center_params
-
-    return abs_coords.squeeze(4).permute(0, 3, 2, 1)  # TODO:
+    abs_coords = point_coordinates + rotation_matrices @ point_center_params  # N x RV_WIDTH x RV_HEIGHT x 2 x 1
+    
+    return abs_coords.squeeze(4).permute(0, 3, 1, 2)  # N x 2 x RV_WIDTH x RV_HEIGHT
 
 
 def params_to_corners(bb_center_coords: torch.Tensor,
@@ -54,27 +53,28 @@ def params_to_corners(bb_center_coords: torch.Tensor,
                       widths: torch.Tensor) -> torch.Tensor:  # 2
     """
 
-    :param bb_center_coords:
-    :param bb_orientations:
-    :param lengths:
-    :param widths:
+    :param bb_center_coords: N x 2 x RV_WIDTH x RV_HEIGHT
+    :param bb_orientations:  N x RV_WIDTH x RV_HEIGHT
+    :param lengths:  N x RV_WIDTH x RV_HEIGHT
+    :param widths: N x RV_WIDTH x RV_HEIGHT
     :return:
     """
-    R = rotation_matrix(bb_orientations).permute(2, 3, 4, 0, 1)
+    
 
-#     print("ROTATION_MATRIX:", R.shape, "lw:", torch.stack((lengths,widths)).unsqueeze(4).permute(1, 2, 3, 0, 4).shape)
+    R = rotation_matrix(bb_orientations).permute(2, 3, 4, 0, 1) # N x RV_WIDTH x RV_HEIGHT x 2 x 2
 
-    b1 = R @ torch.stack((lengths, widths)).unsqueeze(4).permute(1, 2, 3, 0, 4)  # TODO:
-    b2 = R @ torch.stack((lengths, -widths)).unsqueeze(4).permute(1, 2, 3, 0, 4)  # TODO:
-    b3 = R @ torch.stack((-lengths, -widths)).unsqueeze(4).permute(1, 2, 3, 0, 4)  # TODO:
-    b4 = R @ torch.stack((-lengths, widths)).unsqueeze(4).permute(1, 2, 3, 0, 4)  # TODO:
+    print('|0|', torch.stack((lengths, widths)).shape)
+    b1 = R @ torch.stack((lengths, widths)).permute(1, 2, 3, 0).unsqueeze(4) # N x RV_WIDTH x RV_HEIGHT x 2 x 1
+    b2 = R @ torch.stack((lengths, -widths)).permute(1, 2, 3, 0).unsqueeze(4) 
+    b3 = R @ torch.stack((-lengths, -widths)).permute(1, 2, 3, 0).unsqueeze(4) 
+    b4 = R @ torch.stack((-lengths, widths)).permute(1, 2, 3, 0).unsqueeze(4)
 
-#     print("bb_abs_center_coords:", bb_abs_center_coords.shape, "bn:", b1.squeeze(4).permute(0, 3, 1, 2).shape)
+    #     print("bb_abs_center_coords:", bb_abs_center_coords.shape, "bn:", b1.squeeze(4).permute(0, 3, 1, 2).shape)
 
-    b1 = bb_center_coords + b1.squeeze(4).permute(0, 3, 1, 2) / 2  # TODO:
-    b2 = bb_center_coords + b2.squeeze(4).permute(0, 3, 1, 2) / 2 # TODO:
-    b3 = bb_center_coords + b3.squeeze(4).permute(0, 3, 1, 2) / 2 # TODO:
-    b4 = bb_center_coords + b4.squeeze(4).permute(0, 3, 1, 2) / 2 # TODO:
+    b1 = bb_center_coords + b1.squeeze(4).permute(0, 3, 1, 2) / 2 
+    b2 = bb_center_coords + b2.squeeze(4).permute(0, 3, 1, 2) / 2
+    b3 = bb_center_coords + b3.squeeze(4).permute(0, 3, 1, 2) / 2
+    b4 = bb_center_coords + b4.squeeze(4).permute(0, 3, 1, 2) / 2
 
     b = torch.hstack((b1, b2, b3, b4))
 
@@ -86,8 +86,8 @@ def params_to_box_corners(bb_params: torch.Tensor,
                           angles: torch.Tensor) -> torch.Tensor:
     """
         This function turns relative predicted bounding box parameters
-        into 4 coordinates of a box in an absolute coordinate system
-
+        into 4 coordinates of a box 
+        
     :param bb_params: tensor of size [N, 6, RV_WIDTH, RV_HEIGHT],
                       6 components are  [d_x, d_y, w_x, w_y, length, width]
     :param point_coordinates: point coordinates in vehicle ego space
@@ -100,17 +100,20 @@ def params_to_box_corners(bb_params: torch.Tensor,
      lengths, widths) = (bb_params[:, :2],
                          bb_params[:, 2], bb_params[:, 3],
                          bb_params[:, 4], bb_params[:, 5])
+    
+    angles = torch.deg2rad(angles)  # later in rotation matrix we will need radians, not degrees
+    
+    bb_center_coords = params_to_box_centers(point_centers_xy, point_coordinates, angles)  # N x 2 x RV_WIDTH x RV_HEIGHT
 
-    bb_abs_center_coords = params_to_coordinates(point_centers_xy, point_coordinates, angles)
+    bb_orientation = angles + torch.atan2(w_y, w_x)  # N x RV_WIDTH x RV_HEIGHT
 
-    bb_abs_orientation = angles + torch.rad2deg(torch.atan2(w_y, w_x))
 
-    bb_abs_corners = params_to_corners(bb_abs_center_coords,
-                                       bb_abs_orientation,
-                                       lengths,
-                                       widths)
+    bb_corners = params_to_corners(bb_center_coords,
+                                   bb_orientation,
+                                   lengths,
+                                   widths)
 
-    return bb_abs_corners
+    return bb_corners
 
 
 def get_front_bb(sample: dict, nusc):
@@ -159,10 +162,6 @@ def get_front_bb(sample: dict, nusc):
         corners.append(box.bottom_corners())
         
     return np.transpose(np.array(corners).T, (2, 0, 1))
-
-#         bb_labels.append(NUSCENES.lidarseg_name2idx_mapping[box.name])
-
-#     return np.transpose(np.array(corners).T, (2, 0, 1)), np.array(bb_labels)
 
 
 def get_bb_targets(coordinates, bounding_box_corners):

@@ -23,35 +23,32 @@ class BoundingBoxRegressionLoss(torch.nn.Module):
     def __init__(self):
         super(BoundingBoxRegressionLoss, self).__init__()
 
-    def forward(self, inputs, targets, log_std_preds, bb_loss_mask):
+    def forward(self, inputs, targets, log_std_preds, bb_loss_mask):  # 1
         """
         inputs.shape == targets.shape == (N, 8, RV_WIDTH, RV_HEIGHT)
 
         std_preds - predicted log standart deviations of bounding box corners
         """
         
-        # рассчитать лосс для каждой точки rv размера n x 1 x w x h
-        # а потом просто взять по маске
-        # маска будет class_pred_rv[class_pred_rv > 0]
-
-#1         box_counts = torch.sum(box_mask, axis=(1, 2, 3))
-#1         box_counts[box_counts == 0 ] = 1
-        
         if len(inputs.shape) == 0:
             return torch.tensor(0)
 
-#         log_std_preds = log_std_preds.unsqueeze(1)
-#         one_over_sigma = torch.exp(-log_std_preds)
+        box_counts = torch.sum(bb_loss_mask, axis=(1, 2))
+        box_counts[box_counts == 0 ] = 1
 
-#         box_losses = one_over_sigma * torch.abs(inputs - targets) + log_std_preds  # N x C x W x H
-        
-        box_losses = torch.nn.MSELoss(reduction='none')(inputs, targets)
-    
-#1         box_masked_losses = torch.zeros_like(box_losses).masked_scatter(box_mask, box_losses)
-        
-#1         return torch.sum(box_masked_losses, axis=(1, 2, 3))  / box_counts
+        log_std_preds = log_std_preds.unsqueeze(1)
+        one_over_sigma = torch.exp(-log_std_preds)
 
-        return torch.mean(torch.mean(box_losses,axis=1)[bb_loss_mask])
+        box_losses = torch.sum(one_over_sigma * torch.abs(inputs - targets) + log_std_preds, axis=1) # N x C x W x H        
+        box_masked_losses = torch.zeros_like(box_losses).masked_scatter(bb_loss_mask, box_losses)
+        
+        
+#         box_losses = torch.mean(torch.nn.MSELoss(reduction='none')(inputs, targets), axis=1)
+#         box_masked_losses = torch.zeros_like(box_losses).masked_scatter(bb_loss_mask, box_losses)
+
+        
+        return torch.sum(box_masked_losses, axis=(1, 2))  / box_counts
+
 
 class LaserNetLoss(torch.nn.Module):
 
