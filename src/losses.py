@@ -23,28 +23,35 @@ class BoundingBoxRegressionLoss(torch.nn.Module):
     def __init__(self):
         super(BoundingBoxRegressionLoss, self).__init__()
 
-    def forward(self, inputs, targets, log_std_preds, box_mask):
+    def forward(self, inputs, targets, log_std_preds, bb_loss_mask):
         """
         inputs.shape == targets.shape == (N, 8, RV_WIDTH, RV_HEIGHT)
 
         std_preds - predicted log standart deviations of bounding box corners
         """
         
-        box_counts = torch.sum(box_mask, axis=(1, 2, 3))
-        box_counts[box_counts == 0 ] = 1
+        # рассчитать лосс для каждой точки rv размера n x 1 x w x h
+        # а потом просто взять по маске
+        # маска будет class_pred_rv[class_pred_rv > 0]
+
+#1         box_counts = torch.sum(box_mask, axis=(1, 2, 3))
+#1         box_counts[box_counts == 0 ] = 1
         
         if len(inputs.shape) == 0:
             return torch.tensor(0)
 
-        log_std_preds = log_std_preds.unsqueeze(1)
-        one_over_sigma = torch.exp(-log_std_preds)
+#         log_std_preds = log_std_preds.unsqueeze(1)
+#         one_over_sigma = torch.exp(-log_std_preds)
 
-        box_losses = one_over_sigma * torch.abs(inputs - targets) + log_std_preds  # N x C x W x H
-
-        box_masked_losses = torch.zeros_like(box_losses).masked_scatter(box_mask, box_losses)
+#         box_losses = one_over_sigma * torch.abs(inputs - targets) + log_std_preds  # N x C x W x H
         
-        return torch.sum(box_masked_losses, axis=(1, 2, 3))  / box_counts
+        box_losses = torch.nn.MSELoss(reduction='none')(inputs, targets)
+    
+#1         box_masked_losses = torch.zeros_like(box_losses).masked_scatter(box_mask, box_losses)
+        
+#1         return torch.sum(box_masked_losses, axis=(1, 2, 3))  / box_counts
 
+        return torch.mean(torch.mean(box_losses,axis=1)[bb_loss_mask])
 
 class LaserNetLoss(torch.nn.Module):
 
@@ -57,19 +64,18 @@ class LaserNetLoss(torch.nn.Module):
 
     def forward(self,
                 y_pointclass_preds, y_bb_preds, y_logstd_preds, 
-                y_pointclass_target, y_bb_target):
+                y_pointclass_target, y_bb_targets):
         
-        
-        point_pred_labels = torch.argmax(y_pointclass_target, axis=1)
+        point_target_labels = torch.argmax(y_pointclass_target, axis=1)
         
         L_point_cls = self.focal_loss(inputs=y_pointclass_preds,
                                       targets=y_pointclass_target)
         
-        bb_mask = (sum([point_pred_labels == nol for nol in self.non_object_labels]) == 0).unsqueeze(1)
-        bb_mask = bb_mask.repeat(1, 8, 1, 1)
-        
+        # cell mask for points that have bb targets
+        bb_mask = torch.sum(y_bb_targets, axis=1) != 0
+
         L_box_corners = self.bb_reg_loss(y_bb_preds,
-                                         y_bb_target,
+                                         y_bb_targets,
                                          y_logstd_preds,
                                          bb_mask)
         

@@ -62,7 +62,8 @@ class NuscenesDataset(Dataset):
     def get_front_bb(self, sample: dict):
         """
         Function computes and returns
-        An array of points points of a bounding box in sensor coordinates.
+        An array of points of a bounding box in sensor coordinates.
+        Which are in the front 90 degrees
         Each point is a (x, y) coordinate, each BB is 4 points
 
         :param sample: nuscenes sample dictionary
@@ -138,7 +139,6 @@ class NuscenesDataset(Dataset):
 
             if self.points_in_box(coordinates, bb_c).any():
                 return np.array(bb_c[:, :2])
-            
             else:
                 return np.zeros_like(bb_c[:, :2])
     
@@ -166,25 +166,36 @@ class NuscenesRangeViewDataset(NuscenesDataset):
 
     def __init__(self, data_root, n=None):
         super().__init__(data_root, n)
-        
+        self.non_object_labels = [0, 24, 25, 26, 27, 28, 29, 30, 31]
             
     def __len__(self):
         return len(self.samples)
     
-    def get_bb_targets(self, range_view_coordinates, bounding_box_corners):
+    def get_bb_targets(self, range_view_coordinates, range_view_class_targets, bounding_box_corners):
+        """
+                and which are of an object class
+        """
         bbc_target = np.zeros((4, 2, RV_WIDTH, RV_HEIGHT))
                 
         for bbc in bounding_box_corners:
-            point_mask = self.points_in_box(range_view_coordinates, bbc)
-            bbc_target[:, :, point_mask] = np.expand_dims(bbc, 2)
+            point_mask = self.points_in_box(range_view_coordinates, bbc)  # h, w coordinates of points which fall into the box
             
+            range_view_class_labels = np.argmax(range_view_class_targets, axis=0)
+            # now we need to & this mask with the rv mask of classes that do not fall into the non object range
+            class_mask = (sum([range_view_class_labels == nol for nol in self.non_object_labels]) == 0)
+            
+            mask = np.logical_and(class_mask, point_mask)
+            
+            bbc_target[:, :, mask] = np.expand_dims(bbc, 2)
+            range_view_class_targets[:, mask]
+                    
         return bbc_target.reshape((8, RV_WIDTH, RV_HEIGHT))
         
         
     def __getitem__(self, idx):
         pcl_features, pcl_targets, _ = super().__getitem__(idx, compute_boxes=False)
         
-        rotate_prob = np.random.uniform()
+#         rotate_prob = np.random.uniform()
         
 #         if rotate_prob > 0.5:
 #             rotation_angle_y = np.random.uniform(10, 90)
@@ -200,6 +211,6 @@ class NuscenesRangeViewDataset(NuscenesDataset):
         targets = targets.transpose(2, 1, 0)
         
         front_bbs = self.get_front_bb(self.samples[idx])[:, :, :2]  # N x 4 x 2 since we only need xy
-        target_bounding_boxes = self.get_bb_targets(range_view[:2], front_bbs)
-    
+        target_bounding_boxes = self.get_bb_targets(range_view[:2], targets, front_bbs)
+                
         return torch.Tensor(range_view.copy()), torch.Tensor(targets.copy()), torch.Tensor(target_bounding_boxes.copy())
