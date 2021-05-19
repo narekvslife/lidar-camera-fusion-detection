@@ -19,7 +19,7 @@ class LaserNetSeg(nn.Module):
 
         self.num_classes = num_classes
 
-        self.dla = DeepLayerAggregation()
+        self.dla = DeepLayerAggregation(in_channels=5)
 
         self.classes = nn.Conv2d(128, self.num_classes, kernel_size=(1, 1))
 

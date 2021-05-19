@@ -73,10 +73,10 @@ class FeatureAggregatorBlock(nn.Module):
 
 
 class DeepLayerAggregation(nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels):
         super(DeepLayerAggregation, self).__init__()
 
-        self.fe_1a = FeatureExtractorBlock(in_channels=5,
+        self.fe_1a = FeatureExtractorBlock(in_channels=in_channels,
                                            out_channels=64,
                                            downsample=False)
 
