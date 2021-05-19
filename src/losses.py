@@ -2,14 +2,13 @@ import torch
 import torch.nn.functional as F
 
 class FocalLoss(torch.nn.Module):
-    def __init__(self, alpha=1, gamma=2, reduction='mean'):
+    def __init__(self, alpha=1, gamma=2, reduction='none'):
         super(FocalLoss, self).__init__()
         self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
-
+        
     def forward(self, inputs, targets):
-        n_samples, n_classes, _, _ = inputs.shape
         
         targets = torch.argmax(targets, axis=1)
         ce_loss = F.cross_entropy(inputs, targets.type(torch.long), reduction='none')  # == -log(pt)
@@ -17,7 +16,11 @@ class FocalLoss(torch.nn.Module):
         pt = torch.exp(-ce_loss)
         
         f_loss = torch.mean(self.alpha * (1 - pt) ** self.gamma * ce_loss, dim=(1, 2))
-        return f_loss
+        
+        if self.reduction == 'mean':  # this is used in segmentation-only lasernet
+            return torch.mean(f_loss)
+        else:
+            return f_loss
 
 class BoundingBoxRegressionLoss(torch.nn.Module):
     def __init__(self):
@@ -47,7 +50,7 @@ class BoundingBoxRegressionLoss(torch.nn.Module):
 #         box_masked_losses = torch.zeros_like(box_losses).masked_scatter(bb_loss_mask, box_losses)
 
         
-        return torch.sum(box_masked_losses, axis=(1, 2))  / box_counts
+        return torch.sum(box_masked_losses, axis=(1, 2)) / box_counts
 
 
 class LaserNetLoss(torch.nn.Module):

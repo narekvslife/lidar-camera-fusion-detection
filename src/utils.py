@@ -52,7 +52,6 @@ def params_to_corners(bb_center_coords: torch.Tensor,
                       lengths: torch.Tensor,
                       widths: torch.Tensor) -> torch.Tensor:  # 2
     """
-
     :param bb_center_coords: N x 2 x RV_WIDTH x RV_HEIGHT
     :param bb_orientations:  N x RV_WIDTH x RV_HEIGHT
     :param lengths:  N x RV_WIDTH x RV_HEIGHT
@@ -63,13 +62,10 @@ def params_to_corners(bb_center_coords: torch.Tensor,
 
     R = rotation_matrix(bb_orientations).permute(2, 3, 4, 0, 1) # N x RV_WIDTH x RV_HEIGHT x 2 x 2
 
-    print('|0|', torch.stack((lengths, widths)).shape)
-    b1 = R @ torch.stack((lengths, widths)).permute(1, 2, 3, 0).unsqueeze(4) # N x RV_WIDTH x RV_HEIGHT x 2 x 1
-    b2 = R @ torch.stack((lengths, -widths)).permute(1, 2, 3, 0).unsqueeze(4) 
+    b1 = R @ torch.stack(( lengths,  widths)).permute(1, 2, 3, 0).unsqueeze(4) # N x RV_WIDTH x RV_HEIGHT x 2 x 1
+    b2 = R @ torch.stack(( lengths, -widths)).permute(1, 2, 3, 0).unsqueeze(4) 
     b3 = R @ torch.stack((-lengths, -widths)).permute(1, 2, 3, 0).unsqueeze(4) 
-    b4 = R @ torch.stack((-lengths, widths)).permute(1, 2, 3, 0).unsqueeze(4)
-
-    #     print("bb_abs_center_coords:", bb_abs_center_coords.shape, "bn:", b1.squeeze(4).permute(0, 3, 1, 2).shape)
+    b4 = R @ torch.stack((-lengths,  widths)).permute(1, 2, 3, 0).unsqueeze(4)
 
     b1 = bb_center_coords + b1.squeeze(4).permute(0, 3, 1, 2) / 2 
     b2 = bb_center_coords + b2.squeeze(4).permute(0, 3, 1, 2) / 2
@@ -88,7 +84,7 @@ def params_to_box_corners(bb_params: torch.Tensor,
         This function turns relative predicted bounding box parameters
         into 4 coordinates of a box 
         
-    :param bb_params: tensor of size [N, 6, RV_WIDTH, RV_HEIGHT],
+    :param bb_params: tensor of size    [N, 6, RV_WIDTH, RV_HEIGHT],
                       6 components are  [d_x, d_y, w_x, w_y, length, width]
     :param point_coordinates: point coordinates in vehicle ego space
     :param angles:
@@ -205,3 +201,13 @@ def get_bb_targets(coordinates, bounding_box_corners):
         bb_targets.append(bbc_targets_single_rv)
 
     return np.array(bb_targets)
+
+
+def accuracy(inputs, targets):
+    pred_labels = torch.argmax(inputs, axis=1)
+    true_labels = torch.argmax(targets, axis=1)
+        
+    correct_preds = torch.sum(pred_labels == true_labels)
+    all_points = torch.sum(true_labels == true_labels)
+        
+    return correct_preds / all_points
