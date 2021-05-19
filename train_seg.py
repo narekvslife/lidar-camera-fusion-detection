@@ -15,8 +15,8 @@ from src.utils import accuracy
 # train_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(0, 4032))
 # val_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(4032, 5120))
 
-train_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(0, 8064))
-val_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(8064, 9152))
+train_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(0, 16128))
+val_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(16128, 18304))
 
 train_dataloader = DataLoader(train_dataset, batch_size=64, num_workers=0)
 val_dataloader = DataLoader(val_dataset, batch_size=64, num_workers=0)
@@ -27,7 +27,7 @@ LEARNING_RATE = 0.001
 lasernet_seg = torch.nn.DataParallel(LaserNetSeg(), device_ids=[0, 1])
 loss = FocalLoss(reduction='mean')
 optimizer = torch.optim.Adam(lasernet_seg.parameters(), lr=LEARNING_RATE)
-lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=4)  # todo
+lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=4)
 
 lasernet_seg.zero_grad()
 loss.zero_grad()
@@ -79,8 +79,17 @@ for epoch in tqdm(range(EPOCHS)):
     if torch.isnan(L_train) or torch.isnan(L_val):
         break
 
+     
+    writer.add_scalar("Loss/train", L_train.item(), epoch)
+    writer.add_scalar("Loss/val", L_val.item(), epoch)
+    writer.add_scalar("Accuracy/train", accs_train[-1], epoch)
+    writer.add_scalar("Accuracy/val", accs_val[-1], epoch)
+    writer.add_scalar("Scheduler", optimizer.param_groups[0]['lr'], epoch)
+
+
     if epoch % 5 == 0:
         print("train_loss", L_train.item(), "train_acc",  accs_train[-1], "val_loss", L_val.item(), "val_acc",  accs_val[-1])
-        torch.save(lasernet_seg, f'lasernet_seg-d{len(train_dataset)}-b64-e{epoch}-adam-lr{LEARNING_RATE}-schplat')
+        torch.save(lasernet_seg, f'models/lasernet_seg-d{len(train_dataset)}-b64-e{epoch}-adam-lr{LEARNING_RATE}-schplat')
        
     lr_scheduler.step(L_val)
+
