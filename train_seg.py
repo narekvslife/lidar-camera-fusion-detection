@@ -5,6 +5,7 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader 
+from torch.utils.tensorboard import SummaryWriter
 
 from src.datasets import NuscenesRangeViewDataset
 from src.models.lasernet_seg import LaserNetSeg
@@ -12,11 +13,14 @@ from src.losses import FocalLoss
 from src.settings import DATASET_PATH
 from src.utils import accuracy
 
+
+writer = SummaryWriter()
+
 # train_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(0, 4032))
 # val_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(4032, 5120))
 
-train_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(0, 16128))
-val_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(16128, 18304))
+train_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(0, 8064))
+val_dataset = NuscenesRangeViewDataset(data_root=DATASET_PATH, n=(8064, 10240))
 
 train_dataloader = DataLoader(train_dataset, batch_size=64, num_workers=0)
 val_dataloader = DataLoader(val_dataset, batch_size=64, num_workers=0)
