@@ -1,4 +1,4 @@
-from src.settings import NUSCENES, RV_WIDTH, RV_HEIGHT
+from src.settings import RV_WIDTH, RV_HEIGHT
 from src.preprocess import pcl_to_rangeview
 
 import numpy as np
@@ -7,11 +7,12 @@ import torch
 from torch.utils.data import Dataset
 from os.path import join
 from pyquaternion import Quaternion
+from nuscenes import NuScenes
 
 
 class NuscenesDataset(Dataset):
 
-    def __init__(self, data_root, n: tuple=None):
+    def __init__(self, data_root, version = 'v1.0-trainval', n: tuple=None):
         """
         Args:
             root_dir (string): root NuScenes directory
@@ -19,11 +20,12 @@ class NuscenesDataset(Dataset):
             
             n - tuple with left and right index boundaries, in case we don't want to use all data
         """
-        assert len(n) == 2
+        
         self.data_root = data_root
-        self.nuscenes = NUSCENES
-
+        self.nuscenes = NuScenes(version=version, dataroot=data_root, verbose=True)
+       
         if n:
+            assert len(n) == 2
             self.samples = self.nuscenes.sample[n[0]:n[1]]
         else:
             self.samples = self.nuscenes.sample
@@ -164,8 +166,8 @@ class NuscenesDataset(Dataset):
 
 class NuscenesRangeViewDataset(NuscenesDataset):
 
-    def __init__(self, data_root, n=None):
-        super().__init__(data_root, n)
+    def __init__(self, data_root, version = 'v1.0-trainval',  n=None):
+        super().__init__(data_root, version, n)
         self.non_object_labels = [0, 24, 25, 26, 27, 28, 29, 30, 31]
             
     def __len__(self):
